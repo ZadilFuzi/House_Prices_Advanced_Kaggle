@@ -1,0 +1,2054 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "4a49f8e0",
+   "metadata": {
+    "_cell_guid": "b1076dfc-b9ad-4769-8c92-a6c4dae69d19",
+    "_uuid": "8f2839f25d086af736a60e9eeb907d3b93b6e0e5",
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:50.763273Z",
+     "iopub.status.busy": "2024-08-16T09:46:50.762801Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.412717Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.411362Z"
+    },
+    "papermill": {
+     "duration": 2.663167,
+     "end_time": "2024-08-16T09:46:53.415450",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:50.752283",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "/kaggle/input/house-prices-advanced-regression-techniques/sample_submission.csv\n",
+      "/kaggle/input/house-prices-advanced-regression-techniques/data_description.txt\n",
+      "/kaggle/input/house-prices-advanced-regression-techniques/train.csv\n",
+      "/kaggle/input/house-prices-advanced-regression-techniques/test.csv\n"
+     ]
+    }
+   ],
+   "source": [
+    "# This Python 3 environment comes with many helpful analytics libraries installed\n",
+    "# It is defined by the kaggle/python Docker image: https://github.com/kaggle/docker-python\n",
+    "# For example, here's several helpful packages to load\n",
+    "\n",
+    "import numpy as np # linear algebra\n",
+    "import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.linear_model import Lasso\n",
+    "from xgboost import XGBRegressor\n",
+    "from sklearn.pipeline import Pipeline\n",
+    "from sklearn.impute import SimpleImputer\n",
+    "from sklearn.compose import ColumnTransformer\n",
+    "from sklearn.preprocessing import OneHotEncoder\n",
+    "from sklearn.metrics import mean_squared_error\n",
+    "from sklearn.model_selection import GridSearchCV\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "# Input data files are available in the read-only \"../input/\" directory\n",
+    "# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory\n",
+    "\n",
+    "import os\n",
+    "for dirname, _, filenames in os.walk('/kaggle/input'):\n",
+    "    for filename in filenames:\n",
+    "        print(os.path.join(dirname, filename))\n",
+    "\n",
+    "# You can write up to 20GB to the current directory (/kaggle/working/) that gets preserved as output when you create a version using \"Save & Run All\" \n",
+    "# You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "56cb408a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.434679Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.433410Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.508641Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.507443Z"
+    },
+    "papermill": {
+     "duration": 0.087626,
+     "end_time": "2024-08-16T09:46:53.511297",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.423671",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "train = pd.read_csv('/kaggle/input/house-prices-advanced-regression-techniques/train.csv')\n",
+    "test = pd.read_csv('/kaggle/input/house-prices-advanced-regression-techniques/test.csv')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "a89f520e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.529304Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.528327Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.567471Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.566312Z"
+    },
+    "papermill": {
+     "duration": 0.050587,
+     "end_time": "2024-08-16T09:46:53.569893",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.519306",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>Id</th>\n",
+       "      <th>MSSubClass</th>\n",
+       "      <th>MSZoning</th>\n",
+       "      <th>LotFrontage</th>\n",
+       "      <th>LotArea</th>\n",
+       "      <th>Street</th>\n",
+       "      <th>Alley</th>\n",
+       "      <th>LotShape</th>\n",
+       "      <th>LandContour</th>\n",
+       "      <th>Utilities</th>\n",
+       "      <th>...</th>\n",
+       "      <th>PoolArea</th>\n",
+       "      <th>PoolQC</th>\n",
+       "      <th>Fence</th>\n",
+       "      <th>MiscFeature</th>\n",
+       "      <th>MiscVal</th>\n",
+       "      <th>MoSold</th>\n",
+       "      <th>YrSold</th>\n",
+       "      <th>SaleType</th>\n",
+       "      <th>SaleCondition</th>\n",
+       "      <th>SalePrice</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>1</td>\n",
+       "      <td>60</td>\n",
+       "      <td>RL</td>\n",
+       "      <td>65.0</td>\n",
+       "      <td>8450</td>\n",
+       "      <td>Pave</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>Reg</td>\n",
+       "      <td>Lvl</td>\n",
+       "      <td>AllPub</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>0</td>\n",
+       "      <td>2</td>\n",
+       "      <td>2008</td>\n",
+       "      <td>WD</td>\n",
+       "      <td>Normal</td>\n",
+       "      <td>208500</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>2</td>\n",
+       "      <td>20</td>\n",
+       "      <td>RL</td>\n",
+       "      <td>80.0</td>\n",
+       "      <td>9600</td>\n",
+       "      <td>Pave</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>Reg</td>\n",
+       "      <td>Lvl</td>\n",
+       "      <td>AllPub</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>0</td>\n",
+       "      <td>5</td>\n",
+       "      <td>2007</td>\n",
+       "      <td>WD</td>\n",
+       "      <td>Normal</td>\n",
+       "      <td>181500</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>3</td>\n",
+       "      <td>60</td>\n",
+       "      <td>RL</td>\n",
+       "      <td>68.0</td>\n",
+       "      <td>11250</td>\n",
+       "      <td>Pave</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>IR1</td>\n",
+       "      <td>Lvl</td>\n",
+       "      <td>AllPub</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>0</td>\n",
+       "      <td>9</td>\n",
+       "      <td>2008</td>\n",
+       "      <td>WD</td>\n",
+       "      <td>Normal</td>\n",
+       "      <td>223500</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>4</td>\n",
+       "      <td>70</td>\n",
+       "      <td>RL</td>\n",
+       "      <td>60.0</td>\n",
+       "      <td>9550</td>\n",
+       "      <td>Pave</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>IR1</td>\n",
+       "      <td>Lvl</td>\n",
+       "      <td>AllPub</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>0</td>\n",
+       "      <td>2</td>\n",
+       "      <td>2006</td>\n",
+       "      <td>WD</td>\n",
+       "      <td>Abnorml</td>\n",
+       "      <td>140000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>5</td>\n",
+       "      <td>60</td>\n",
+       "      <td>RL</td>\n",
+       "      <td>84.0</td>\n",
+       "      <td>14260</td>\n",
+       "      <td>Pave</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>IR1</td>\n",
+       "      <td>Lvl</td>\n",
+       "      <td>AllPub</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>0</td>\n",
+       "      <td>12</td>\n",
+       "      <td>2008</td>\n",
+       "      <td>WD</td>\n",
+       "      <td>Normal</td>\n",
+       "      <td>250000</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>5 rows × 81 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   Id  MSSubClass MSZoning  LotFrontage  LotArea Street Alley LotShape  \\\n",
+       "0   1          60       RL         65.0     8450   Pave   NaN      Reg   \n",
+       "1   2          20       RL         80.0     9600   Pave   NaN      Reg   \n",
+       "2   3          60       RL         68.0    11250   Pave   NaN      IR1   \n",
+       "3   4          70       RL         60.0     9550   Pave   NaN      IR1   \n",
+       "4   5          60       RL         84.0    14260   Pave   NaN      IR1   \n",
+       "\n",
+       "  LandContour Utilities  ... PoolArea PoolQC Fence MiscFeature MiscVal MoSold  \\\n",
+       "0         Lvl    AllPub  ...        0    NaN   NaN         NaN       0      2   \n",
+       "1         Lvl    AllPub  ...        0    NaN   NaN         NaN       0      5   \n",
+       "2         Lvl    AllPub  ...        0    NaN   NaN         NaN       0      9   \n",
+       "3         Lvl    AllPub  ...        0    NaN   NaN         NaN       0      2   \n",
+       "4         Lvl    AllPub  ...        0    NaN   NaN         NaN       0     12   \n",
+       "\n",
+       "  YrSold  SaleType  SaleCondition  SalePrice  \n",
+       "0   2008        WD         Normal     208500  \n",
+       "1   2007        WD         Normal     181500  \n",
+       "2   2008        WD         Normal     223500  \n",
+       "3   2006        WD        Abnorml     140000  \n",
+       "4   2008        WD         Normal     250000  \n",
+       "\n",
+       "[5 rows x 81 columns]"
+      ]
+     },
+     "execution_count": 3,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "train.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "1ec6871a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.588531Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.588136Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.679967Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.678857Z"
+    },
+    "papermill": {
+     "duration": 0.104034,
+     "end_time": "2024-08-16T09:46:53.682618",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.578584",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>Id</th>\n",
+       "      <th>MSSubClass</th>\n",
+       "      <th>LotFrontage</th>\n",
+       "      <th>LotArea</th>\n",
+       "      <th>OverallQual</th>\n",
+       "      <th>OverallCond</th>\n",
+       "      <th>YearBuilt</th>\n",
+       "      <th>YearRemodAdd</th>\n",
+       "      <th>MasVnrArea</th>\n",
+       "      <th>BsmtFinSF1</th>\n",
+       "      <th>...</th>\n",
+       "      <th>WoodDeckSF</th>\n",
+       "      <th>OpenPorchSF</th>\n",
+       "      <th>EnclosedPorch</th>\n",
+       "      <th>3SsnPorch</th>\n",
+       "      <th>ScreenPorch</th>\n",
+       "      <th>PoolArea</th>\n",
+       "      <th>MiscVal</th>\n",
+       "      <th>MoSold</th>\n",
+       "      <th>YrSold</th>\n",
+       "      <th>SalePrice</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>count</th>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1201.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1452.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>...</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>1460.000000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>mean</th>\n",
+       "      <td>730.500000</td>\n",
+       "      <td>56.897260</td>\n",
+       "      <td>70.049958</td>\n",
+       "      <td>10516.828082</td>\n",
+       "      <td>6.099315</td>\n",
+       "      <td>5.575342</td>\n",
+       "      <td>1971.267808</td>\n",
+       "      <td>1984.865753</td>\n",
+       "      <td>103.685262</td>\n",
+       "      <td>443.639726</td>\n",
+       "      <td>...</td>\n",
+       "      <td>94.244521</td>\n",
+       "      <td>46.660274</td>\n",
+       "      <td>21.954110</td>\n",
+       "      <td>3.409589</td>\n",
+       "      <td>15.060959</td>\n",
+       "      <td>2.758904</td>\n",
+       "      <td>43.489041</td>\n",
+       "      <td>6.321918</td>\n",
+       "      <td>2007.815753</td>\n",
+       "      <td>180921.195890</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>std</th>\n",
+       "      <td>421.610009</td>\n",
+       "      <td>42.300571</td>\n",
+       "      <td>24.284752</td>\n",
+       "      <td>9981.264932</td>\n",
+       "      <td>1.382997</td>\n",
+       "      <td>1.112799</td>\n",
+       "      <td>30.202904</td>\n",
+       "      <td>20.645407</td>\n",
+       "      <td>181.066207</td>\n",
+       "      <td>456.098091</td>\n",
+       "      <td>...</td>\n",
+       "      <td>125.338794</td>\n",
+       "      <td>66.256028</td>\n",
+       "      <td>61.119149</td>\n",
+       "      <td>29.317331</td>\n",
+       "      <td>55.757415</td>\n",
+       "      <td>40.177307</td>\n",
+       "      <td>496.123024</td>\n",
+       "      <td>2.703626</td>\n",
+       "      <td>1.328095</td>\n",
+       "      <td>79442.502883</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>min</th>\n",
+       "      <td>1.000000</td>\n",
+       "      <td>20.000000</td>\n",
+       "      <td>21.000000</td>\n",
+       "      <td>1300.000000</td>\n",
+       "      <td>1.000000</td>\n",
+       "      <td>1.000000</td>\n",
+       "      <td>1872.000000</td>\n",
+       "      <td>1950.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>1.000000</td>\n",
+       "      <td>2006.000000</td>\n",
+       "      <td>34900.000000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>25%</th>\n",
+       "      <td>365.750000</td>\n",
+       "      <td>20.000000</td>\n",
+       "      <td>59.000000</td>\n",
+       "      <td>7553.500000</td>\n",
+       "      <td>5.000000</td>\n",
+       "      <td>5.000000</td>\n",
+       "      <td>1954.000000</td>\n",
+       "      <td>1967.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>5.000000</td>\n",
+       "      <td>2007.000000</td>\n",
+       "      <td>129975.000000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>50%</th>\n",
+       "      <td>730.500000</td>\n",
+       "      <td>50.000000</td>\n",
+       "      <td>69.000000</td>\n",
+       "      <td>9478.500000</td>\n",
+       "      <td>6.000000</td>\n",
+       "      <td>5.000000</td>\n",
+       "      <td>1973.000000</td>\n",
+       "      <td>1994.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>383.500000</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>25.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>6.000000</td>\n",
+       "      <td>2008.000000</td>\n",
+       "      <td>163000.000000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>75%</th>\n",
+       "      <td>1095.250000</td>\n",
+       "      <td>70.000000</td>\n",
+       "      <td>80.000000</td>\n",
+       "      <td>11601.500000</td>\n",
+       "      <td>7.000000</td>\n",
+       "      <td>6.000000</td>\n",
+       "      <td>2000.000000</td>\n",
+       "      <td>2004.000000</td>\n",
+       "      <td>166.000000</td>\n",
+       "      <td>712.250000</td>\n",
+       "      <td>...</td>\n",
+       "      <td>168.000000</td>\n",
+       "      <td>68.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>0.000000</td>\n",
+       "      <td>8.000000</td>\n",
+       "      <td>2009.000000</td>\n",
+       "      <td>214000.000000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>max</th>\n",
+       "      <td>1460.000000</td>\n",
+       "      <td>190.000000</td>\n",
+       "      <td>313.000000</td>\n",
+       "      <td>215245.000000</td>\n",
+       "      <td>10.000000</td>\n",
+       "      <td>9.000000</td>\n",
+       "      <td>2010.000000</td>\n",
+       "      <td>2010.000000</td>\n",
+       "      <td>1600.000000</td>\n",
+       "      <td>5644.000000</td>\n",
+       "      <td>...</td>\n",
+       "      <td>857.000000</td>\n",
+       "      <td>547.000000</td>\n",
+       "      <td>552.000000</td>\n",
+       "      <td>508.000000</td>\n",
+       "      <td>480.000000</td>\n",
+       "      <td>738.000000</td>\n",
+       "      <td>15500.000000</td>\n",
+       "      <td>12.000000</td>\n",
+       "      <td>2010.000000</td>\n",
+       "      <td>755000.000000</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>8 rows × 38 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                Id   MSSubClass  LotFrontage        LotArea  OverallQual  \\\n",
+       "count  1460.000000  1460.000000  1201.000000    1460.000000  1460.000000   \n",
+       "mean    730.500000    56.897260    70.049958   10516.828082     6.099315   \n",
+       "std     421.610009    42.300571    24.284752    9981.264932     1.382997   \n",
+       "min       1.000000    20.000000    21.000000    1300.000000     1.000000   \n",
+       "25%     365.750000    20.000000    59.000000    7553.500000     5.000000   \n",
+       "50%     730.500000    50.000000    69.000000    9478.500000     6.000000   \n",
+       "75%    1095.250000    70.000000    80.000000   11601.500000     7.000000   \n",
+       "max    1460.000000   190.000000   313.000000  215245.000000    10.000000   \n",
+       "\n",
+       "       OverallCond    YearBuilt  YearRemodAdd   MasVnrArea   BsmtFinSF1  ...  \\\n",
+       "count  1460.000000  1460.000000   1460.000000  1452.000000  1460.000000  ...   \n",
+       "mean      5.575342  1971.267808   1984.865753   103.685262   443.639726  ...   \n",
+       "std       1.112799    30.202904     20.645407   181.066207   456.098091  ...   \n",
+       "min       1.000000  1872.000000   1950.000000     0.000000     0.000000  ...   \n",
+       "25%       5.000000  1954.000000   1967.000000     0.000000     0.000000  ...   \n",
+       "50%       5.000000  1973.000000   1994.000000     0.000000   383.500000  ...   \n",
+       "75%       6.000000  2000.000000   2004.000000   166.000000   712.250000  ...   \n",
+       "max       9.000000  2010.000000   2010.000000  1600.000000  5644.000000  ...   \n",
+       "\n",
+       "        WoodDeckSF  OpenPorchSF  EnclosedPorch    3SsnPorch  ScreenPorch  \\\n",
+       "count  1460.000000  1460.000000    1460.000000  1460.000000  1460.000000   \n",
+       "mean     94.244521    46.660274      21.954110     3.409589    15.060959   \n",
+       "std     125.338794    66.256028      61.119149    29.317331    55.757415   \n",
+       "min       0.000000     0.000000       0.000000     0.000000     0.000000   \n",
+       "25%       0.000000     0.000000       0.000000     0.000000     0.000000   \n",
+       "50%       0.000000    25.000000       0.000000     0.000000     0.000000   \n",
+       "75%     168.000000    68.000000       0.000000     0.000000     0.000000   \n",
+       "max     857.000000   547.000000     552.000000   508.000000   480.000000   \n",
+       "\n",
+       "          PoolArea       MiscVal       MoSold       YrSold      SalePrice  \n",
+       "count  1460.000000   1460.000000  1460.000000  1460.000000    1460.000000  \n",
+       "mean      2.758904     43.489041     6.321918  2007.815753  180921.195890  \n",
+       "std      40.177307    496.123024     2.703626     1.328095   79442.502883  \n",
+       "min       0.000000      0.000000     1.000000  2006.000000   34900.000000  \n",
+       "25%       0.000000      0.000000     5.000000  2007.000000  129975.000000  \n",
+       "50%       0.000000      0.000000     6.000000  2008.000000  163000.000000  \n",
+       "75%       0.000000      0.000000     8.000000  2009.000000  214000.000000  \n",
+       "max     738.000000  15500.000000    12.000000  2010.000000  755000.000000  \n",
+       "\n",
+       "[8 rows x 38 columns]"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "train.describe()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "96229e37",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.701403Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.701031Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.728553Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.727200Z"
+    },
+    "papermill": {
+     "duration": 0.040326,
+     "end_time": "2024-08-16T09:46:53.731648",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.691322",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "<class 'pandas.core.frame.DataFrame'>\n",
+      "RangeIndex: 1460 entries, 0 to 1459\n",
+      "Data columns (total 81 columns):\n",
+      " #   Column         Non-Null Count  Dtype  \n",
+      "---  ------         --------------  -----  \n",
+      " 0   Id             1460 non-null   int64  \n",
+      " 1   MSSubClass     1460 non-null   int64  \n",
+      " 2   MSZoning       1460 non-null   object \n",
+      " 3   LotFrontage    1201 non-null   float64\n",
+      " 4   LotArea        1460 non-null   int64  \n",
+      " 5   Street         1460 non-null   object \n",
+      " 6   Alley          91 non-null     object \n",
+      " 7   LotShape       1460 non-null   object \n",
+      " 8   LandContour    1460 non-null   object \n",
+      " 9   Utilities      1460 non-null   object \n",
+      " 10  LotConfig      1460 non-null   object \n",
+      " 11  LandSlope      1460 non-null   object \n",
+      " 12  Neighborhood   1460 non-null   object \n",
+      " 13  Condition1     1460 non-null   object \n",
+      " 14  Condition2     1460 non-null   object \n",
+      " 15  BldgType       1460 non-null   object \n",
+      " 16  HouseStyle     1460 non-null   object \n",
+      " 17  OverallQual    1460 non-null   int64  \n",
+      " 18  OverallCond    1460 non-null   int64  \n",
+      " 19  YearBuilt      1460 non-null   int64  \n",
+      " 20  YearRemodAdd   1460 non-null   int64  \n",
+      " 21  RoofStyle      1460 non-null   object \n",
+      " 22  RoofMatl       1460 non-null   object \n",
+      " 23  Exterior1st    1460 non-null   object \n",
+      " 24  Exterior2nd    1460 non-null   object \n",
+      " 25  MasVnrType     588 non-null    object \n",
+      " 26  MasVnrArea     1452 non-null   float64\n",
+      " 27  ExterQual      1460 non-null   object \n",
+      " 28  ExterCond      1460 non-null   object \n",
+      " 29  Foundation     1460 non-null   object \n",
+      " 30  BsmtQual       1423 non-null   object \n",
+      " 31  BsmtCond       1423 non-null   object \n",
+      " 32  BsmtExposure   1422 non-null   object \n",
+      " 33  BsmtFinType1   1423 non-null   object \n",
+      " 34  BsmtFinSF1     1460 non-null   int64  \n",
+      " 35  BsmtFinType2   1422 non-null   object \n",
+      " 36  BsmtFinSF2     1460 non-null   int64  \n",
+      " 37  BsmtUnfSF      1460 non-null   int64  \n",
+      " 38  TotalBsmtSF    1460 non-null   int64  \n",
+      " 39  Heating        1460 non-null   object \n",
+      " 40  HeatingQC      1460 non-null   object \n",
+      " 41  CentralAir     1460 non-null   object \n",
+      " 42  Electrical     1459 non-null   object \n",
+      " 43  1stFlrSF       1460 non-null   int64  \n",
+      " 44  2ndFlrSF       1460 non-null   int64  \n",
+      " 45  LowQualFinSF   1460 non-null   int64  \n",
+      " 46  GrLivArea      1460 non-null   int64  \n",
+      " 47  BsmtFullBath   1460 non-null   int64  \n",
+      " 48  BsmtHalfBath   1460 non-null   int64  \n",
+      " 49  FullBath       1460 non-null   int64  \n",
+      " 50  HalfBath       1460 non-null   int64  \n",
+      " 51  BedroomAbvGr   1460 non-null   int64  \n",
+      " 52  KitchenAbvGr   1460 non-null   int64  \n",
+      " 53  KitchenQual    1460 non-null   object \n",
+      " 54  TotRmsAbvGrd   1460 non-null   int64  \n",
+      " 55  Functional     1460 non-null   object \n",
+      " 56  Fireplaces     1460 non-null   int64  \n",
+      " 57  FireplaceQu    770 non-null    object \n",
+      " 58  GarageType     1379 non-null   object \n",
+      " 59  GarageYrBlt    1379 non-null   float64\n",
+      " 60  GarageFinish   1379 non-null   object \n",
+      " 61  GarageCars     1460 non-null   int64  \n",
+      " 62  GarageArea     1460 non-null   int64  \n",
+      " 63  GarageQual     1379 non-null   object \n",
+      " 64  GarageCond     1379 non-null   object \n",
+      " 65  PavedDrive     1460 non-null   object \n",
+      " 66  WoodDeckSF     1460 non-null   int64  \n",
+      " 67  OpenPorchSF    1460 non-null   int64  \n",
+      " 68  EnclosedPorch  1460 non-null   int64  \n",
+      " 69  3SsnPorch      1460 non-null   int64  \n",
+      " 70  ScreenPorch    1460 non-null   int64  \n",
+      " 71  PoolArea       1460 non-null   int64  \n",
+      " 72  PoolQC         7 non-null      object \n",
+      " 73  Fence          281 non-null    object \n",
+      " 74  MiscFeature    54 non-null     object \n",
+      " 75  MiscVal        1460 non-null   int64  \n",
+      " 76  MoSold         1460 non-null   int64  \n",
+      " 77  YrSold         1460 non-null   int64  \n",
+      " 78  SaleType       1460 non-null   object \n",
+      " 79  SaleCondition  1460 non-null   object \n",
+      " 80  SalePrice      1460 non-null   int64  \n",
+      "dtypes: float64(3), int64(35), object(43)\n",
+      "memory usage: 924.0+ KB\n"
+     ]
+    }
+   ],
+   "source": [
+    "train.info()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "05bf9a0c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.751961Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.751541Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.758794Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.757521Z"
+    },
+    "papermill": {
+     "duration": 0.020296,
+     "end_time": "2024-08-16T09:46:53.761071",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.740775",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "(1460, 81)"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "train.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "77f16786",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.781790Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.781356Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.796299Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.794917Z"
+    },
+    "papermill": {
+     "duration": 0.027916,
+     "end_time": "2024-08-16T09:46:53.798816",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.770900",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "Id                 0\n",
+       "MSSubClass         0\n",
+       "MSZoning           0\n",
+       "LotFrontage      259\n",
+       "LotArea            0\n",
+       "                ... \n",
+       "MoSold             0\n",
+       "YrSold             0\n",
+       "SaleType           0\n",
+       "SaleCondition      0\n",
+       "SalePrice          0\n",
+       "Length: 81, dtype: int64"
+      ]
+     },
+     "execution_count": 7,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Check for missing values\n",
+    "train.isnull().sum()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "069834c1",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.819807Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.819023Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.828580Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.827604Z"
+    },
+    "papermill": {
+     "duration": 0.022097,
+     "end_time": "2024-08-16T09:46:53.830977",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.808880",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "missing = train.isnull().sum()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "id": "543d2563",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.851033Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.850483Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.860720Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.859487Z"
+    },
+    "papermill": {
+     "duration": 0.023336,
+     "end_time": "2024-08-16T09:46:53.863345",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.840009",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Drop columns with more than 50% missing values\n",
+    "train = train.drop(columns=missing[missing > 0.5 * train.shape[0]].index)\n",
+    "test = test.drop(columns=missing[missing > 0.5 * train.shape[0]].index)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "ae6037b2",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.883969Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.883592Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.891430Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.890248Z"
+    },
+    "papermill": {
+     "duration": 0.021078,
+     "end_time": "2024-08-16T09:46:53.893913",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.872835",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Split the data into features and target variable\n",
+    "X = train.drop(columns=['SalePrice'])\n",
+    "y = train['SalePrice']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "id": "b6a56485",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.913835Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.913412Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.921316Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.920213Z"
+    },
+    "papermill": {
+     "duration": 0.020413,
+     "end_time": "2024-08-16T09:46:53.923610",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.903197",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Identify numeric and categorical columns\n",
+    "numeric_features = X.select_dtypes(include=['int64', 'float64']).columns\n",
+    "categorical_features = X.select_dtypes(include=['object']).columns"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "id": "3a765eb4",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.945720Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.944764Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.950559Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.949465Z"
+    },
+    "papermill": {
+     "duration": 0.019721,
+     "end_time": "2024-08-16T09:46:53.952729",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.933008",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Create a column transformer for preprocessing\n",
+    "preprocessor = ColumnTransformer(\n",
+    "    transformers=[\n",
+    "        ('num', SimpleImputer(strategy='mean'), numeric_features),\n",
+    "        ('cat', Pipeline(steps=[\n",
+    "            ('imputer', SimpleImputer(strategy='most_frequent')),\n",
+    "            ('encoder', OneHotEncoder(handle_unknown='ignore'))\n",
+    "        ]), categorical_features)\n",
+    "    ])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "id": "f9a30978",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:53.972769Z",
+     "iopub.status.busy": "2024-08-16T09:46:53.971958Z",
+     "iopub.status.idle": "2024-08-16T09:46:53.983100Z",
+     "shell.execute_reply": "2024-08-16T09:46:53.981966Z"
+    },
+    "papermill": {
+     "duration": 0.023677,
+     "end_time": "2024-08-16T09:46:53.985465",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.961788",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Split the data into training and testing sets\n",
+    "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "46ff364b",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:54.005200Z",
+     "iopub.status.busy": "2024-08-16T09:46:54.004822Z",
+     "iopub.status.idle": "2024-08-16T09:46:54.010613Z",
+     "shell.execute_reply": "2024-08-16T09:46:54.009461Z"
+    },
+    "papermill": {
+     "duration": 0.018457,
+     "end_time": "2024-08-16T09:46:54.013065",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:53.994608",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "X_train shape: (1168, 75)\n",
+      "y_train shape: (1168,)\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Ensure that X_train and y_train are defined\n",
+    "print(\"X_train shape:\", X_train.shape)\n",
+    "print(\"y_train shape:\", y_train.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "09b95f98",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:54.032702Z",
+     "iopub.status.busy": "2024-08-16T09:46:54.032302Z",
+     "iopub.status.idle": "2024-08-16T09:46:54.037334Z",
+     "shell.execute_reply": "2024-08-16T09:46:54.036117Z"
+    },
+    "papermill": {
+     "duration": 0.017531,
+     "end_time": "2024-08-16T09:46:54.039606",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:54.022075",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Create a pipeline for preprocessing and modeling\n",
+    "pipeline = Pipeline([\n",
+    "    ('preprocessor', preprocessor),\n",
+    "    ('regressor', XGBRegressor())\n",
+    "])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "225062f9",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:54.059869Z",
+     "iopub.status.busy": "2024-08-16T09:46:54.059103Z",
+     "iopub.status.idle": "2024-08-16T09:46:54.064097Z",
+     "shell.execute_reply": "2024-08-16T09:46:54.063073Z"
+    },
+    "papermill": {
+     "duration": 0.017635,
+     "end_time": "2024-08-16T09:46:54.066316",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:54.048681",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Define the parameter grid for grid search\n",
+    "param_grid = {\n",
+    "    'regressor__n_estimators': [100, 500, 1000],\n",
+    "    'regressor__learning_rate': [0.01, 0.1, 0.5],\n",
+    "    'regressor__max_depth': [3, 5, 7]\n",
+    "}"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "2ebb5223",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:46:54.086304Z",
+     "iopub.status.busy": "2024-08-16T09:46:54.085449Z",
+     "iopub.status.idle": "2024-08-16T09:50:42.935850Z",
+     "shell.execute_reply": "2024-08-16T09:50:42.934768Z"
+    },
+    "papermill": {
+     "duration": 228.871788,
+     "end_time": "2024-08-16T09:50:42.947167",
+     "exception": false,
+     "start_time": "2024-08-16T09:46:54.075379",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<style>#sk-container-id-1 {color: black;background-color: white;}#sk-container-id-1 pre{padding: 0;}#sk-container-id-1 div.sk-toggleable {background-color: white;}#sk-container-id-1 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-1 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-1 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-1 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-1 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-1 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-1 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-1 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-1 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-1 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-1 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-1 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-1 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-1 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-1 div.sk-item {position: relative;z-index: 1;}#sk-container-id-1 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-1 div.sk-item::before, #sk-container-id-1 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-1 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-1 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-1 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-1 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-1 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-1 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-1 div.sk-label-container {text-align: center;}#sk-container-id-1 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-1 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-1\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>GridSearchCV(cv=5,\n",
+       "             estimator=Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                                        ColumnTransformer(transformers=[(&#x27;num&#x27;,\n",
+       "                                                                         SimpleImputer(),\n",
+       "                                                                         Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;B...\n",
+       "                                                     max_depth=None,\n",
+       "                                                     max_leaves=None,\n",
+       "                                                     min_child_weight=None,\n",
+       "                                                     missing=nan,\n",
+       "                                                     monotone_constraints=None,\n",
+       "                                                     multi_strategy=None,\n",
+       "                                                     n_estimators=None,\n",
+       "                                                     n_jobs=None,\n",
+       "                                                     num_parallel_tree=None,\n",
+       "                                                     random_state=None, ...))]),\n",
+       "             param_grid={&#x27;regressor__learning_rate&#x27;: [0.01, 0.1, 0.5],\n",
+       "                         &#x27;regressor__max_depth&#x27;: [3, 5, 7],\n",
+       "                         &#x27;regressor__n_estimators&#x27;: [100, 500, 1000]},\n",
+       "             scoring=&#x27;neg_mean_squared_error&#x27;)</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-1\" type=\"checkbox\" ><label for=\"sk-estimator-id-1\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">GridSearchCV</label><div class=\"sk-toggleable__content\"><pre>GridSearchCV(cv=5,\n",
+       "             estimator=Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                                        ColumnTransformer(transformers=[(&#x27;num&#x27;,\n",
+       "                                                                         SimpleImputer(),\n",
+       "                                                                         Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;B...\n",
+       "                                                     max_depth=None,\n",
+       "                                                     max_leaves=None,\n",
+       "                                                     min_child_weight=None,\n",
+       "                                                     missing=nan,\n",
+       "                                                     monotone_constraints=None,\n",
+       "                                                     multi_strategy=None,\n",
+       "                                                     n_estimators=None,\n",
+       "                                                     n_jobs=None,\n",
+       "                                                     num_parallel_tree=None,\n",
+       "                                                     random_state=None, ...))]),\n",
+       "             param_grid={&#x27;regressor__learning_rate&#x27;: [0.01, 0.1, 0.5],\n",
+       "                         &#x27;regressor__max_depth&#x27;: [3, 5, 7],\n",
+       "                         &#x27;regressor__n_estimators&#x27;: [100, 500, 1000]},\n",
+       "             scoring=&#x27;neg_mean_squared_error&#x27;)</pre></div></div></div><div class=\"sk-parallel\"><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-2\" type=\"checkbox\" ><label for=\"sk-estimator-id-2\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">estimator: Pipeline</label><div class=\"sk-toggleable__content\"><pre>Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                 ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                                  Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;Hal...\n",
+       "                              feature_types=None, gamma=None, grow_policy=None,\n",
+       "                              importance_type=None,\n",
+       "                              interaction_constraints=None, learning_rate=None,\n",
+       "                              max_bin=None, max_cat_threshold=None,\n",
+       "                              max_cat_to_onehot=None, max_delta_step=None,\n",
+       "                              max_depth=None, max_leaves=None,\n",
+       "                              min_child_weight=None, missing=nan,\n",
+       "                              monotone_constraints=None, multi_strategy=None,\n",
+       "                              n_estimators=None, n_jobs=None,\n",
+       "                              num_parallel_tree=None, random_state=None, ...))])</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-serial\"><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-3\" type=\"checkbox\" ><label for=\"sk-estimator-id-3\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">preprocessor: ColumnTransformer</label><div class=\"sk-toggleable__content\"><pre>ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                 Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAb...\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])</pre></div></div></div><div class=\"sk-parallel\"><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-4\" type=\"checkbox\" ><label for=\"sk-estimator-id-4\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">num</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAbvGr&#x27;, &#x27;TotRmsAbvGrd&#x27;,\n",
+       "       &#x27;Fireplaces&#x27;, &#x27;GarageYrBlt&#x27;, &#x27;GarageCars&#x27;, &#x27;GarageArea&#x27;, &#x27;WoodDeckSF&#x27;,\n",
+       "       &#x27;OpenPorchSF&#x27;, &#x27;EnclosedPorch&#x27;, &#x27;3SsnPorch&#x27;, &#x27;ScreenPorch&#x27;, &#x27;PoolArea&#x27;,\n",
+       "       &#x27;MiscVal&#x27;, &#x27;MoSold&#x27;, &#x27;YrSold&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-5\" type=\"checkbox\" ><label for=\"sk-estimator-id-5\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer()</pre></div></div></div></div></div></div><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-6\" type=\"checkbox\" ><label for=\"sk-estimator-id-6\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">cat</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;MSZoning&#x27;, &#x27;Street&#x27;, &#x27;LotShape&#x27;, &#x27;LandContour&#x27;, &#x27;Utilities&#x27;,\n",
+       "       &#x27;LotConfig&#x27;, &#x27;LandSlope&#x27;, &#x27;Neighborhood&#x27;, &#x27;Condition1&#x27;, &#x27;Condition2&#x27;,\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-7\" type=\"checkbox\" ><label for=\"sk-estimator-id-7\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer(strategy=&#x27;most_frequent&#x27;)</pre></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-8\" type=\"checkbox\" ><label for=\"sk-estimator-id-8\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">OneHotEncoder</label><div class=\"sk-toggleable__content\"><pre>OneHotEncoder(handle_unknown=&#x27;ignore&#x27;)</pre></div></div></div></div></div></div></div></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-9\" type=\"checkbox\" ><label for=\"sk-estimator-id-9\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">XGBRegressor</label><div class=\"sk-toggleable__content\"><pre>XGBRegressor(base_score=None, booster=None, callbacks=None,\n",
+       "             colsample_bylevel=None, colsample_bynode=None,\n",
+       "             colsample_bytree=None, device=None, early_stopping_rounds=None,\n",
+       "             enable_categorical=False, eval_metric=None, feature_types=None,\n",
+       "             gamma=None, grow_policy=None, importance_type=None,\n",
+       "             interaction_constraints=None, learning_rate=None, max_bin=None,\n",
+       "             max_cat_threshold=None, max_cat_to_onehot=None,\n",
+       "             max_delta_step=None, max_depth=None, max_leaves=None,\n",
+       "             min_child_weight=None, missing=nan, monotone_constraints=None,\n",
+       "             multi_strategy=None, n_estimators=None, n_jobs=None,\n",
+       "             num_parallel_tree=None, random_state=None, ...)</pre></div></div></div></div></div></div></div></div></div></div></div></div>"
+      ],
+      "text/plain": [
+       "GridSearchCV(cv=5,\n",
+       "             estimator=Pipeline(steps=[('preprocessor',\n",
+       "                                        ColumnTransformer(transformers=[('num',\n",
+       "                                                                         SimpleImputer(),\n",
+       "                                                                         Index(['Id', 'MSSubClass', 'LotFrontage', 'LotArea', 'OverallQual',\n",
+       "       'OverallCond', 'YearBuilt', 'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',\n",
+       "       'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', '1stFlrSF', '2ndFlrSF',\n",
+       "       'LowQualFinSF', 'GrLivArea', 'BsmtFullBath', 'B...\n",
+       "                                                     max_depth=None,\n",
+       "                                                     max_leaves=None,\n",
+       "                                                     min_child_weight=None,\n",
+       "                                                     missing=nan,\n",
+       "                                                     monotone_constraints=None,\n",
+       "                                                     multi_strategy=None,\n",
+       "                                                     n_estimators=None,\n",
+       "                                                     n_jobs=None,\n",
+       "                                                     num_parallel_tree=None,\n",
+       "                                                     random_state=None, ...))]),\n",
+       "             param_grid={'regressor__learning_rate': [0.01, 0.1, 0.5],\n",
+       "                         'regressor__max_depth': [3, 5, 7],\n",
+       "                         'regressor__n_estimators': [100, 500, 1000]},\n",
+       "             scoring='neg_mean_squared_error')"
+      ]
+     },
+     "execution_count": 17,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Perform grid search to find the best parameters\n",
+    "grid_search = GridSearchCV(pipeline, param_grid, cv=5, scoring='neg_mean_squared_error')\n",
+    "grid_search.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "id": "4aa57a22",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:42.968321Z",
+     "iopub.status.busy": "2024-08-16T09:50:42.967311Z",
+     "iopub.status.idle": "2024-08-16T09:50:42.972485Z",
+     "shell.execute_reply": "2024-08-16T09:50:42.971401Z"
+    },
+    "papermill": {
+     "duration": 0.018084,
+     "end_time": "2024-08-16T09:50:42.974626",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:42.956542",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Get the best model and its parameters\n",
+    "best_model = grid_search.best_estimator_\n",
+    "best_params = grid_search.best_params_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "id": "a278d8a1",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:42.995898Z",
+     "iopub.status.busy": "2024-08-16T09:50:42.994933Z",
+     "iopub.status.idle": "2024-08-16T09:50:43.725488Z",
+     "shell.execute_reply": "2024-08-16T09:50:43.724451Z"
+    },
+    "papermill": {
+     "duration": 0.743685,
+     "end_time": "2024-08-16T09:50:43.727947",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:42.984262",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<style>#sk-container-id-2 {color: black;background-color: white;}#sk-container-id-2 pre{padding: 0;}#sk-container-id-2 div.sk-toggleable {background-color: white;}#sk-container-id-2 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-2 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-2 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-2 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-2 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-2 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-2 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-2 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-2 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-2 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-2 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-2 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-2 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-2 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-2 div.sk-item {position: relative;z-index: 1;}#sk-container-id-2 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-2 div.sk-item::before, #sk-container-id-2 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-2 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-2 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-2 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-2 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-2 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-2 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-2 div.sk-label-container {text-align: center;}#sk-container-id-2 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-2 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-2\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                 ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                                  Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;Hal...\n",
+       "                              feature_types=None, gamma=None, grow_policy=None,\n",
+       "                              importance_type=None,\n",
+       "                              interaction_constraints=None, learning_rate=0.1,\n",
+       "                              max_bin=None, max_cat_threshold=None,\n",
+       "                              max_cat_to_onehot=None, max_delta_step=None,\n",
+       "                              max_depth=3, max_leaves=None,\n",
+       "                              min_child_weight=None, missing=nan,\n",
+       "                              monotone_constraints=None, multi_strategy=None,\n",
+       "                              n_estimators=500, n_jobs=None,\n",
+       "                              num_parallel_tree=None, random_state=None, ...))])</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-10\" type=\"checkbox\" ><label for=\"sk-estimator-id-10\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">Pipeline</label><div class=\"sk-toggleable__content\"><pre>Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                 ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                                  Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;Hal...\n",
+       "                              feature_types=None, gamma=None, grow_policy=None,\n",
+       "                              importance_type=None,\n",
+       "                              interaction_constraints=None, learning_rate=0.1,\n",
+       "                              max_bin=None, max_cat_threshold=None,\n",
+       "                              max_cat_to_onehot=None, max_delta_step=None,\n",
+       "                              max_depth=3, max_leaves=None,\n",
+       "                              min_child_weight=None, missing=nan,\n",
+       "                              monotone_constraints=None, multi_strategy=None,\n",
+       "                              n_estimators=500, n_jobs=None,\n",
+       "                              num_parallel_tree=None, random_state=None, ...))])</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-11\" type=\"checkbox\" ><label for=\"sk-estimator-id-11\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">preprocessor: ColumnTransformer</label><div class=\"sk-toggleable__content\"><pre>ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                 Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAb...\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])</pre></div></div></div><div class=\"sk-parallel\"><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-12\" type=\"checkbox\" ><label for=\"sk-estimator-id-12\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">num</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAbvGr&#x27;, &#x27;TotRmsAbvGrd&#x27;,\n",
+       "       &#x27;Fireplaces&#x27;, &#x27;GarageYrBlt&#x27;, &#x27;GarageCars&#x27;, &#x27;GarageArea&#x27;, &#x27;WoodDeckSF&#x27;,\n",
+       "       &#x27;OpenPorchSF&#x27;, &#x27;EnclosedPorch&#x27;, &#x27;3SsnPorch&#x27;, &#x27;ScreenPorch&#x27;, &#x27;PoolArea&#x27;,\n",
+       "       &#x27;MiscVal&#x27;, &#x27;MoSold&#x27;, &#x27;YrSold&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-13\" type=\"checkbox\" ><label for=\"sk-estimator-id-13\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer()</pre></div></div></div></div></div></div><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-14\" type=\"checkbox\" ><label for=\"sk-estimator-id-14\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">cat</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;MSZoning&#x27;, &#x27;Street&#x27;, &#x27;LotShape&#x27;, &#x27;LandContour&#x27;, &#x27;Utilities&#x27;,\n",
+       "       &#x27;LotConfig&#x27;, &#x27;LandSlope&#x27;, &#x27;Neighborhood&#x27;, &#x27;Condition1&#x27;, &#x27;Condition2&#x27;,\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-15\" type=\"checkbox\" ><label for=\"sk-estimator-id-15\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer(strategy=&#x27;most_frequent&#x27;)</pre></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-16\" type=\"checkbox\" ><label for=\"sk-estimator-id-16\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">OneHotEncoder</label><div class=\"sk-toggleable__content\"><pre>OneHotEncoder(handle_unknown=&#x27;ignore&#x27;)</pre></div></div></div></div></div></div></div></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-17\" type=\"checkbox\" ><label for=\"sk-estimator-id-17\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">XGBRegressor</label><div class=\"sk-toggleable__content\"><pre>XGBRegressor(base_score=None, booster=None, callbacks=None,\n",
+       "             colsample_bylevel=None, colsample_bynode=None,\n",
+       "             colsample_bytree=None, device=None, early_stopping_rounds=None,\n",
+       "             enable_categorical=False, eval_metric=None, feature_types=None,\n",
+       "             gamma=None, grow_policy=None, importance_type=None,\n",
+       "             interaction_constraints=None, learning_rate=0.1, max_bin=None,\n",
+       "             max_cat_threshold=None, max_cat_to_onehot=None,\n",
+       "             max_delta_step=None, max_depth=3, max_leaves=None,\n",
+       "             min_child_weight=None, missing=nan, monotone_constraints=None,\n",
+       "             multi_strategy=None, n_estimators=500, n_jobs=None,\n",
+       "             num_parallel_tree=None, random_state=None, ...)</pre></div></div></div></div></div></div></div>"
+      ],
+      "text/plain": [
+       "Pipeline(steps=[('preprocessor',\n",
+       "                 ColumnTransformer(transformers=[('num', SimpleImputer(),\n",
+       "                                                  Index(['Id', 'MSSubClass', 'LotFrontage', 'LotArea', 'OverallQual',\n",
+       "       'OverallCond', 'YearBuilt', 'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',\n",
+       "       'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', '1stFlrSF', '2ndFlrSF',\n",
+       "       'LowQualFinSF', 'GrLivArea', 'BsmtFullBath', 'BsmtHalfBath', 'FullBath',\n",
+       "       'Hal...\n",
+       "                              feature_types=None, gamma=None, grow_policy=None,\n",
+       "                              importance_type=None,\n",
+       "                              interaction_constraints=None, learning_rate=0.1,\n",
+       "                              max_bin=None, max_cat_threshold=None,\n",
+       "                              max_cat_to_onehot=None, max_delta_step=None,\n",
+       "                              max_depth=3, max_leaves=None,\n",
+       "                              min_child_weight=None, missing=nan,\n",
+       "                              monotone_constraints=None, multi_strategy=None,\n",
+       "                              n_estimators=500, n_jobs=None,\n",
+       "                              num_parallel_tree=None, random_state=None, ...))])"
+      ]
+     },
+     "execution_count": 19,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Fit the best model on the training data\n",
+    "best_model.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "id": "fe64976c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:43.750736Z",
+     "iopub.status.busy": "2024-08-16T09:50:43.749619Z",
+     "iopub.status.idle": "2024-08-16T09:50:43.773605Z",
+     "shell.execute_reply": "2024-08-16T09:50:43.772705Z"
+    },
+    "papermill": {
+     "duration": 0.037722,
+     "end_time": "2024-08-16T09:50:43.776047",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:43.738325",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Predict the target variable on the testing data\n",
+    "y_pred = best_model.predict(X_test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "id": "cb7ffa19",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:43.800031Z",
+     "iopub.status.busy": "2024-08-16T09:50:43.799668Z",
+     "iopub.status.idle": "2024-08-16T09:50:43.805053Z",
+     "shell.execute_reply": "2024-08-16T09:50:43.804001Z"
+    },
+    "papermill": {
+     "duration": 0.018974,
+     "end_time": "2024-08-16T09:50:43.807285",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:43.788311",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Calculate the mean squared error\n",
+    "mse = mean_squared_error(y_test, y_pred)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "id": "977947a7",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:43.829014Z",
+     "iopub.status.busy": "2024-08-16T09:50:43.828630Z",
+     "iopub.status.idle": "2024-08-16T09:50:43.834493Z",
+     "shell.execute_reply": "2024-08-16T09:50:43.833296Z"
+    },
+    "papermill": {
+     "duration": 0.019388,
+     "end_time": "2024-08-16T09:50:43.836721",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:43.817333",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Best Parameters: {'regressor__learning_rate': 0.1, 'regressor__max_depth': 3, 'regressor__n_estimators': 500}\n",
+      "Mean Squared Error: 659019509.8249924\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Print the best parameters and mean squared error\n",
+    "print(\"Best Parameters:\", best_params)\n",
+    "print(\"Mean Squared Error:\", mse)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "id": "5b636bcf",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:43.858877Z",
+     "iopub.status.busy": "2024-08-16T09:50:43.858469Z",
+     "iopub.status.idle": "2024-08-16T09:50:43.863731Z",
+     "shell.execute_reply": "2024-08-16T09:50:43.862778Z"
+    },
+    "papermill": {
+     "duration": 0.019151,
+     "end_time": "2024-08-16T09:50:43.865975",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:43.846824",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Create a pipeline for Lasso regression with increased max_iter\n",
+    "lasso_pipeline = Pipeline([\n",
+    "    ('preprocessor', preprocessor),\n",
+    "    ('regressor', Lasso(alpha=0.1, max_iter=10000))\n",
+    "])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "72db29cf",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:43.888563Z",
+     "iopub.status.busy": "2024-08-16T09:50:43.888149Z",
+     "iopub.status.idle": "2024-08-16T09:50:53.913792Z",
+     "shell.execute_reply": "2024-08-16T09:50:53.912675Z"
+    },
+    "papermill": {
+     "duration": 10.039702,
+     "end_time": "2024-08-16T09:50:53.916380",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:43.876678",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<style>#sk-container-id-3 {color: black;background-color: white;}#sk-container-id-3 pre{padding: 0;}#sk-container-id-3 div.sk-toggleable {background-color: white;}#sk-container-id-3 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-3 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-3 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-3 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-3 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-3 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-3 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-3 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-3 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-3 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-3 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-3 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-3 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-3 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-3 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-3 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-3 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-3 div.sk-item {position: relative;z-index: 1;}#sk-container-id-3 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-3 div.sk-item::before, #sk-container-id-3 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-3 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-3 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-3 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-3 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-3 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-3 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-3 div.sk-label-container {text-align: center;}#sk-container-id-3 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-3 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-3\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                 ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                                  Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;Hal...\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])),\n",
+       "                (&#x27;regressor&#x27;, Lasso(alpha=0.1, max_iter=10000))])</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-18\" type=\"checkbox\" ><label for=\"sk-estimator-id-18\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">Pipeline</label><div class=\"sk-toggleable__content\"><pre>Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                 ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                                  Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;Hal...\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])),\n",
+       "                (&#x27;regressor&#x27;, Lasso(alpha=0.1, max_iter=10000))])</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-19\" type=\"checkbox\" ><label for=\"sk-estimator-id-19\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">preprocessor: ColumnTransformer</label><div class=\"sk-toggleable__content\"><pre>ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                 Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAb...\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])</pre></div></div></div><div class=\"sk-parallel\"><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-20\" type=\"checkbox\" ><label for=\"sk-estimator-id-20\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">num</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAbvGr&#x27;, &#x27;TotRmsAbvGrd&#x27;,\n",
+       "       &#x27;Fireplaces&#x27;, &#x27;GarageYrBlt&#x27;, &#x27;GarageCars&#x27;, &#x27;GarageArea&#x27;, &#x27;WoodDeckSF&#x27;,\n",
+       "       &#x27;OpenPorchSF&#x27;, &#x27;EnclosedPorch&#x27;, &#x27;3SsnPorch&#x27;, &#x27;ScreenPorch&#x27;, &#x27;PoolArea&#x27;,\n",
+       "       &#x27;MiscVal&#x27;, &#x27;MoSold&#x27;, &#x27;YrSold&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-21\" type=\"checkbox\" ><label for=\"sk-estimator-id-21\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer()</pre></div></div></div></div></div></div><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-22\" type=\"checkbox\" ><label for=\"sk-estimator-id-22\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">cat</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;MSZoning&#x27;, &#x27;Street&#x27;, &#x27;LotShape&#x27;, &#x27;LandContour&#x27;, &#x27;Utilities&#x27;,\n",
+       "       &#x27;LotConfig&#x27;, &#x27;LandSlope&#x27;, &#x27;Neighborhood&#x27;, &#x27;Condition1&#x27;, &#x27;Condition2&#x27;,\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-23\" type=\"checkbox\" ><label for=\"sk-estimator-id-23\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer(strategy=&#x27;most_frequent&#x27;)</pre></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-24\" type=\"checkbox\" ><label for=\"sk-estimator-id-24\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">OneHotEncoder</label><div class=\"sk-toggleable__content\"><pre>OneHotEncoder(handle_unknown=&#x27;ignore&#x27;)</pre></div></div></div></div></div></div></div></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-25\" type=\"checkbox\" ><label for=\"sk-estimator-id-25\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">Lasso</label><div class=\"sk-toggleable__content\"><pre>Lasso(alpha=0.1, max_iter=10000)</pre></div></div></div></div></div></div></div>"
+      ],
+      "text/plain": [
+       "Pipeline(steps=[('preprocessor',\n",
+       "                 ColumnTransformer(transformers=[('num', SimpleImputer(),\n",
+       "                                                  Index(['Id', 'MSSubClass', 'LotFrontage', 'LotArea', 'OverallQual',\n",
+       "       'OverallCond', 'YearBuilt', 'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',\n",
+       "       'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', '1stFlrSF', '2ndFlrSF',\n",
+       "       'LowQualFinSF', 'GrLivArea', 'BsmtFullBath', 'BsmtHalfBath', 'FullBath',\n",
+       "       'Hal...\n",
+       "       'Exterior2nd', 'ExterQual', 'ExterCond', 'Foundation', 'BsmtQual',\n",
+       "       'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2', 'Heating',\n",
+       "       'HeatingQC', 'CentralAir', 'Electrical', 'KitchenQual', 'Functional',\n",
+       "       'FireplaceQu', 'GarageType', 'GarageFinish', 'GarageQual', 'GarageCond',\n",
+       "       'PavedDrive', 'SaleType', 'SaleCondition'],\n",
+       "      dtype='object'))])),\n",
+       "                ('regressor', Lasso(alpha=0.1, max_iter=10000))])"
+      ]
+     },
+     "execution_count": 24,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Fit Lasso regression on the training data\n",
+    "lasso_pipeline.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "id": "061ff5cd",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:50:53.939216Z",
+     "iopub.status.busy": "2024-08-16T09:50:53.938835Z",
+     "iopub.status.idle": "2024-08-16T09:51:03.928667Z",
+     "shell.execute_reply": "2024-08-16T09:51:03.927566Z"
+    },
+    "papermill": {
+     "duration": 10.004078,
+     "end_time": "2024-08-16T09:51:03.931253",
+     "exception": false,
+     "start_time": "2024-08-16T09:50:53.927175",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<style>#sk-container-id-4 {color: black;background-color: white;}#sk-container-id-4 pre{padding: 0;}#sk-container-id-4 div.sk-toggleable {background-color: white;}#sk-container-id-4 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-4 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-4 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-4 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-4 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-4 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-4 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-4 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-4 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-4 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-4 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-4 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-4 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-4 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-4 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-4 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-4 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-4 div.sk-item {position: relative;z-index: 1;}#sk-container-id-4 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-4 div.sk-item::before, #sk-container-id-4 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-4 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-4 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-4 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-4 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-4 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-4 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-4 div.sk-label-container {text-align: center;}#sk-container-id-4 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-4 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-4\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                 ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                                  Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;Hal...\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])),\n",
+       "                (&#x27;regressor&#x27;, Lasso(alpha=0.1, max_iter=10000))])</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-26\" type=\"checkbox\" ><label for=\"sk-estimator-id-26\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">Pipeline</label><div class=\"sk-toggleable__content\"><pre>Pipeline(steps=[(&#x27;preprocessor&#x27;,\n",
+       "                 ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                                  Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;Hal...\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])),\n",
+       "                (&#x27;regressor&#x27;, Lasso(alpha=0.1, max_iter=10000))])</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item sk-dashed-wrapped\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-27\" type=\"checkbox\" ><label for=\"sk-estimator-id-27\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">preprocessor: ColumnTransformer</label><div class=\"sk-toggleable__content\"><pre>ColumnTransformer(transformers=[(&#x27;num&#x27;, SimpleImputer(),\n",
+       "                                 Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAb...\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;))])</pre></div></div></div><div class=\"sk-parallel\"><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-28\" type=\"checkbox\" ><label for=\"sk-estimator-id-28\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">num</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;Id&#x27;, &#x27;MSSubClass&#x27;, &#x27;LotFrontage&#x27;, &#x27;LotArea&#x27;, &#x27;OverallQual&#x27;,\n",
+       "       &#x27;OverallCond&#x27;, &#x27;YearBuilt&#x27;, &#x27;YearRemodAdd&#x27;, &#x27;MasVnrArea&#x27;, &#x27;BsmtFinSF1&#x27;,\n",
+       "       &#x27;BsmtFinSF2&#x27;, &#x27;BsmtUnfSF&#x27;, &#x27;TotalBsmtSF&#x27;, &#x27;1stFlrSF&#x27;, &#x27;2ndFlrSF&#x27;,\n",
+       "       &#x27;LowQualFinSF&#x27;, &#x27;GrLivArea&#x27;, &#x27;BsmtFullBath&#x27;, &#x27;BsmtHalfBath&#x27;, &#x27;FullBath&#x27;,\n",
+       "       &#x27;HalfBath&#x27;, &#x27;BedroomAbvGr&#x27;, &#x27;KitchenAbvGr&#x27;, &#x27;TotRmsAbvGrd&#x27;,\n",
+       "       &#x27;Fireplaces&#x27;, &#x27;GarageYrBlt&#x27;, &#x27;GarageCars&#x27;, &#x27;GarageArea&#x27;, &#x27;WoodDeckSF&#x27;,\n",
+       "       &#x27;OpenPorchSF&#x27;, &#x27;EnclosedPorch&#x27;, &#x27;3SsnPorch&#x27;, &#x27;ScreenPorch&#x27;, &#x27;PoolArea&#x27;,\n",
+       "       &#x27;MiscVal&#x27;, &#x27;MoSold&#x27;, &#x27;YrSold&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-29\" type=\"checkbox\" ><label for=\"sk-estimator-id-29\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer()</pre></div></div></div></div></div></div><div class=\"sk-parallel-item\"><div class=\"sk-item\"><div class=\"sk-label-container\"><div class=\"sk-label sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-30\" type=\"checkbox\" ><label for=\"sk-estimator-id-30\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">cat</label><div class=\"sk-toggleable__content\"><pre>Index([&#x27;MSZoning&#x27;, &#x27;Street&#x27;, &#x27;LotShape&#x27;, &#x27;LandContour&#x27;, &#x27;Utilities&#x27;,\n",
+       "       &#x27;LotConfig&#x27;, &#x27;LandSlope&#x27;, &#x27;Neighborhood&#x27;, &#x27;Condition1&#x27;, &#x27;Condition2&#x27;,\n",
+       "       &#x27;BldgType&#x27;, &#x27;HouseStyle&#x27;, &#x27;RoofStyle&#x27;, &#x27;RoofMatl&#x27;, &#x27;Exterior1st&#x27;,\n",
+       "       &#x27;Exterior2nd&#x27;, &#x27;ExterQual&#x27;, &#x27;ExterCond&#x27;, &#x27;Foundation&#x27;, &#x27;BsmtQual&#x27;,\n",
+       "       &#x27;BsmtCond&#x27;, &#x27;BsmtExposure&#x27;, &#x27;BsmtFinType1&#x27;, &#x27;BsmtFinType2&#x27;, &#x27;Heating&#x27;,\n",
+       "       &#x27;HeatingQC&#x27;, &#x27;CentralAir&#x27;, &#x27;Electrical&#x27;, &#x27;KitchenQual&#x27;, &#x27;Functional&#x27;,\n",
+       "       &#x27;FireplaceQu&#x27;, &#x27;GarageType&#x27;, &#x27;GarageFinish&#x27;, &#x27;GarageQual&#x27;, &#x27;GarageCond&#x27;,\n",
+       "       &#x27;PavedDrive&#x27;, &#x27;SaleType&#x27;, &#x27;SaleCondition&#x27;],\n",
+       "      dtype=&#x27;object&#x27;)</pre></div></div></div><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-serial\"><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-31\" type=\"checkbox\" ><label for=\"sk-estimator-id-31\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer(strategy=&#x27;most_frequent&#x27;)</pre></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-32\" type=\"checkbox\" ><label for=\"sk-estimator-id-32\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">OneHotEncoder</label><div class=\"sk-toggleable__content\"><pre>OneHotEncoder(handle_unknown=&#x27;ignore&#x27;)</pre></div></div></div></div></div></div></div></div></div></div><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-33\" type=\"checkbox\" ><label for=\"sk-estimator-id-33\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">Lasso</label><div class=\"sk-toggleable__content\"><pre>Lasso(alpha=0.1, max_iter=10000)</pre></div></div></div></div></div></div></div>"
+      ],
+      "text/plain": [
+       "Pipeline(steps=[('preprocessor',\n",
+       "                 ColumnTransformer(transformers=[('num', SimpleImputer(),\n",
+       "                                                  Index(['Id', 'MSSubClass', 'LotFrontage', 'LotArea', 'OverallQual',\n",
+       "       'OverallCond', 'YearBuilt', 'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',\n",
+       "       'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', '1stFlrSF', '2ndFlrSF',\n",
+       "       'LowQualFinSF', 'GrLivArea', 'BsmtFullBath', 'BsmtHalfBath', 'FullBath',\n",
+       "       'Hal...\n",
+       "       'Exterior2nd', 'ExterQual', 'ExterCond', 'Foundation', 'BsmtQual',\n",
+       "       'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2', 'Heating',\n",
+       "       'HeatingQC', 'CentralAir', 'Electrical', 'KitchenQual', 'Functional',\n",
+       "       'FireplaceQu', 'GarageType', 'GarageFinish', 'GarageQual', 'GarageCond',\n",
+       "       'PavedDrive', 'SaleType', 'SaleCondition'],\n",
+       "      dtype='object'))])),\n",
+       "                ('regressor', Lasso(alpha=0.1, max_iter=10000))])"
+      ]
+     },
+     "execution_count": 25,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Fit Lasso regression on the training data\n",
+    "lasso_pipeline.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "b6894666",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:03.954411Z",
+     "iopub.status.busy": "2024-08-16T09:51:03.954035Z",
+     "iopub.status.idle": "2024-08-16T09:51:03.974567Z",
+     "shell.execute_reply": "2024-08-16T09:51:03.973412Z"
+    },
+    "papermill": {
+     "duration": 0.03496,
+     "end_time": "2024-08-16T09:51:03.977029",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:03.942069",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Predict the target variable on the testing data\n",
+    "y_pred_lasso = lasso_pipeline.predict(X_test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "id": "b64321c0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:04.000551Z",
+     "iopub.status.busy": "2024-08-16T09:51:04.000164Z",
+     "iopub.status.idle": "2024-08-16T09:51:04.006658Z",
+     "shell.execute_reply": "2024-08-16T09:51:04.005514Z"
+    },
+    "papermill": {
+     "duration": 0.021102,
+     "end_time": "2024-08-16T09:51:04.009063",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:03.987961",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Calculate the mean squared error for Lasso regression\n",
+    "mse_lasso = mean_squared_error(y_test, y_pred_lasso)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "id": "47dfc99e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:04.032722Z",
+     "iopub.status.busy": "2024-08-16T09:51:04.032337Z",
+     "iopub.status.idle": "2024-08-16T09:51:04.037742Z",
+     "shell.execute_reply": "2024-08-16T09:51:04.036589Z"
+    },
+    "papermill": {
+     "duration": 0.020458,
+     "end_time": "2024-08-16T09:51:04.040432",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:04.019974",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Mean Squared Error (Lasso): 816976837.3655386\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Print the mean squared error for Lasso regression\n",
+    "print(\"Mean Squared Error (Lasso):\", mse_lasso)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "id": "ffc58d07",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:04.063550Z",
+     "iopub.status.busy": "2024-08-16T09:51:04.063150Z",
+     "iopub.status.idle": "2024-08-16T09:51:04.415814Z",
+     "shell.execute_reply": "2024-08-16T09:51:04.414573Z"
+    },
+    "papermill": {
+     "duration": 0.367068,
+     "end_time": "2024-08-16T09:51:04.418328",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:04.051260",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "image/png": "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",
+      "text/plain": [
+       "<Figure size 640x480 with 1 Axes>"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "# Plot the predicted and actual values\n",
+    "plt.scatter(y_test, y_pred, color='b', label='XGBRegressor')\n",
+    "plt.scatter(y_test, y_pred_lasso, color='r', label='Lasso')\n",
+    "plt.xlabel('Actual SalePrice')\n",
+    "plt.ylabel('Predicted SalePrice')\n",
+    "plt.title('Comparison of Predicted and Actual SalePrice')\n",
+    "plt.legend()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "id": "3db9b516",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:04.443480Z",
+     "iopub.status.busy": "2024-08-16T09:51:04.442644Z",
+     "iopub.status.idle": "2024-08-16T09:51:04.486436Z",
+     "shell.execute_reply": "2024-08-16T09:51:04.485571Z"
+    },
+    "papermill": {
+     "duration": 0.059305,
+     "end_time": "2024-08-16T09:51:04.489232",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:04.429927",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Predict the target variable on the test data\n",
+    "test_pred = best_model.predict(test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "id": "44a3b29f",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:04.515260Z",
+     "iopub.status.busy": "2024-08-16T09:51:04.514532Z",
+     "iopub.status.idle": "2024-08-16T09:51:04.520224Z",
+     "shell.execute_reply": "2024-08-16T09:51:04.519118Z"
+    },
+    "papermill": {
+     "duration": 0.020975,
+     "end_time": "2024-08-16T09:51:04.522382",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:04.501407",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Create a submission file\n",
+    "submission = pd.DataFrame({\n",
+    "    'Id': test['Id'],\n",
+    "    'SalePrice': test_pred\n",
+    "})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "id": "5b8707c0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:04.547577Z",
+     "iopub.status.busy": "2024-08-16T09:51:04.547181Z",
+     "iopub.status.idle": "2024-08-16T09:51:04.558142Z",
+     "shell.execute_reply": "2024-08-16T09:51:04.556922Z"
+    },
+    "papermill": {
+     "duration": 0.026632,
+     "end_time": "2024-08-16T09:51:04.560808",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:04.534176",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Save the submission file\n",
+    "submission_file_path = '/kaggle/working/submission.csv'\n",
+    "submission.to_csv(submission_file_path, index=False)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "id": "0355352e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2024-08-16T09:51:04.586158Z",
+     "iopub.status.busy": "2024-08-16T09:51:04.585794Z",
+     "iopub.status.idle": "2024-08-16T09:51:04.591733Z",
+     "shell.execute_reply": "2024-08-16T09:51:04.590568Z"
+    },
+    "papermill": {
+     "duration": 0.021513,
+     "end_time": "2024-08-16T09:51:04.594265",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:04.572752",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Submission file created successfully at /kaggle/working/submission.csv\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Check if the submission file was created successfully\n",
+    "if os.path.exists(submission_file_path):\n",
+    "    print(f\"Submission file created successfully at {submission_file_path}\")\n",
+    "else:\n",
+    "    print(\"Error: Submission file not found\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "1e723c33",
+   "metadata": {
+    "papermill": {
+     "duration": 0.011394,
+     "end_time": "2024-08-16T09:51:04.617596",
+     "exception": false,
+     "start_time": "2024-08-16T09:51:04.606202",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kaggle": {
+   "accelerator": "none",
+   "dataSources": [
+    {
+     "databundleVersionId": 868283,
+     "sourceId": 5407,
+     "sourceType": "competition"
+    }
+   ],
+   "dockerImageVersionId": 30746,
+   "isGpuEnabled": false,
+   "isInternetEnabled": false,
+   "language": "python",
+   "sourceType": "notebook"
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.13"
+  },
+  "papermill": {
+   "default_parameters": {},
+   "duration": 257.394753,
+   "end_time": "2024-08-16T09:51:05.250661",
+   "environment_variables": {},
+   "exception": null,
+   "input_path": "__notebook__.ipynb",
+   "output_path": "__notebook__.ipynb",
+   "parameters": {},
+   "start_time": "2024-08-16T09:46:47.855908",
+   "version": "2.5.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
